@@ -1,0 +1,2 @@
+1. 在合并repo的分支的时候出现了出现分支之间的数据不同步的现象，因此需要把分支合并并允许不相关的历史。
+git pull origin master --allow-unrelated-histories

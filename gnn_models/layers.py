@@ -1,7 +1,7 @@
 '''
 Author: your name
 Date: 2021-05-12 12:36:36
-LastEditTime: 2021-05-14 08:41:04
+LastEditTime: 2021-05-14 13:18:30
 LastEditors: Please set LastEditors
 Description: In User Settings Edit
 FilePath: /dglke/gnn_models/layers.py
@@ -56,7 +56,7 @@ class EmbeddingLayer(nn.Module):
 
 
 class RGCN(nn.Module):
-    def __init__(self, num_nodes, h_dim, out_dim, num_rels, num_bases, num_hidden_layers=1, dropout=0.5, use_self_loop=False, use_cuda=False):
+    def __init__(self, num_nodes, h_dim, out_dim, num_rels, num_bases, num_hidden_layers=1, dropout=0.5, use_self_loop=False, use_cuda=False, reg_param=0):
         super(RGCN, self).__init__()
         self.num_nodes = num_nodes
         self.h_dim = h_dim
@@ -67,19 +67,31 @@ class RGCN(nn.Module):
         self.dropout = dropout
         self.use_self_loop = use_self_loop
         self.use_cuda = use_cuda
+        self.reg_param = reg_param
         self.rgcn_layers = nn.ModuleList()
         self.build_input_layer()
         self.build_hidden_layers()
         self.w_relations = nn.Parameter(torch.Tensor(num_rels, self.h_dim))
         nn.init.xavier_uniform_(
             self.w_relations, gain=nn.init.calculate_gain('relu'))
+
     def calc_score(self, embedding, triples):
-        ## DistMult
-        s=embedding[triples[:,0]]
-        r=self.w_relations[triples[:,1]]
-        o=embedding[triples[:,2]]
-        score=torch.sum(s*r*o,dim=1)
+        # DistMult
+        s = embedding[triples[:, 0]]
+        r = self.w_relations[triples[:, 1]]
+        o = embedding[triples[:, 2]]
+        score = torch.sum(s*r*o, dim=1)
         return score
+
+    def regularization_loss(self, embedding):
+        return torch.mean(embedding.pow(2))+torch.mean(self.w_relations.pow(2))
+
+    def get_loss(self, g, embed, triples, labels):
+        score = self.calc_score(embed, triples)
+        predict_loss = F.binary_cross_entropy_with_logits(score, labels)
+        reg_loss = self.regularization_loss(embed)
+        return predict_loss+self.reg_param*reg_loss
+
     def build_input_layer(self):
         self.rgcn_layers.append(EmbeddingLayer(self.num_nodes, self.h_dim))
 
@@ -94,3 +106,8 @@ class RGCN(nn.Module):
         for layer in self.rgcn_layers:
             h = layer(g, h, r, norm)
         return h
+def node_norm_to_edge_norm(g, node_norm):
+    g =g.local_var()
+    g.ndata['norm']=node_norm
+    g.apply_edges(lambda edges : {'norm':edges.dst['norm']})
+    return g.edata['norm']
