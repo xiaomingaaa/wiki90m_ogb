@@ -1,7 +1,7 @@
 '''
 Author: your name
 Date: 2021-05-14 13:21:39
-LastEditTime: 2021-05-14 13:39:38
+LastEditTime: 2021-05-15 08:55:53
 LastEditors: Please set LastEditors
 Description: In User Settings Edit
 FilePath: /dglke/gnn_models/utils.py
@@ -11,10 +11,6 @@ Utility functions for link prediction
 Most code is adapted from authors' implementation of RGCN link prediction:
 https://github.com/MichSchli/RelationPrediction
 """
-import numpy as np
-import torch
-from torch.multiprocessing import Queue
-import dgl
 
 #######################################################################
 #
@@ -22,17 +18,25 @@ import dgl
 #
 #######################################################################
 
+
+
+
+import numpy as np
+import torch
+from torch.multiprocessing import Queue
+import dgl
 def get_adj_and_degrees(num_nodes, triplets):
     """ Get adjacency list and degrees of the graph
     """
     adj_list = [[] for _ in range(num_nodes)]
-    for i,triplet in enumerate(triplets):
+    for i, triplet in enumerate(triplets):
         adj_list[triplet[0]].append([i, triplet[2]])
         adj_list[triplet[2]].append([i, triplet[0]])
 
     degrees = np.array([len(a) for a in adj_list])
     adj_list = [np.array(a) for a in adj_list]
     return adj_list, degrees
+
 
 def sample_edge_neighborhood(adj_list, degrees, n_triplets, sample_size):
     """Sample edges by neighborhool expansion.
@@ -41,7 +45,7 @@ def sample_edge_neighborhood(adj_list, degrees, n_triplets, sample_size):
     """
     edges = np.zeros((sample_size), dtype=np.int32)
 
-    #initialize
+    # initialize
     sample_counts = np.array([d for d in degrees])
     picked = np.array([False for _ in range(n_triplets)])
     seen = np.array([False for _ in degrees])
@@ -77,10 +81,12 @@ def sample_edge_neighborhood(adj_list, degrees, n_triplets, sample_size):
 
     return edges
 
+
 def sample_edge_uniform(adj_list, degrees, n_triplets, sample_size):
     """Sample edges uniformly from all the edges."""
     all_edges = np.arange(n_triplets)
     return np.random.choice(all_edges, sample_size, replace=False)
+
 
 def generate_sampled_graph_and_labels(triplets, sample_size, split_size,
                                       num_rels, adj_list, degrees,
@@ -91,11 +97,14 @@ def generate_sampled_graph_and_labels(triplets, sample_size, split_size,
     """
     # perform edge neighbor sampling
     if sampler == "uniform":
-        edges = sample_edge_uniform(adj_list, degrees, len(triplets), sample_size)
+        edges = sample_edge_uniform(
+            adj_list, degrees, len(triplets), sample_size)
     elif sampler == "neighbor":
-        edges = sample_edge_neighborhood(adj_list, degrees, len(triplets), sample_size)
+        edges = sample_edge_neighborhood(
+            adj_list, degrees, len(triplets), sample_size)
     else:
-        raise ValueError("Sampler type must be either 'uniform' or 'neighbor'.")
+        raise ValueError(
+            "Sampler type must be either 'uniform' or 'neighbor'.")
 
     # relabel nodes to have consecutive node ids
     edges = triplets[edges]
@@ -124,12 +133,14 @@ def generate_sampled_graph_and_labels(triplets, sample_size, split_size,
                                              (src, rel, dst))
     return g, uniq_v, rel, norm, samples, labels
 
+
 def comp_deg_norm(g):
     g = g.local_var()
     in_deg = g.in_degrees(range(g.number_of_nodes())).float().numpy()
     norm = 1.0 / in_deg
     norm[np.isinf(norm)] = 0
     return norm
+
 
 def build_graph_from_triplets(num_nodes, num_rels, triplets):
     """ Create a DGL graph. The graph is bidirectional because RGCN authors
@@ -149,10 +160,12 @@ def build_graph_from_triplets(num_nodes, num_rels, triplets):
     print("# nodes: {}, # edges: {}".format(num_nodes, len(src)))
     return g, rel.astype('int64'), norm.astype('int64')
 
+
 def build_test_graph(num_nodes, num_rels, edges):
     src, rel, dst = edges.transpose()
     print("Test graph:")
     return build_graph_from_triplets(num_nodes, num_rels, (src, rel, dst))
+
 
 def negative_sampling(pos_samples, num_entity, negative_rate):
     size_of_batch = len(pos_samples)
@@ -175,11 +188,13 @@ def negative_sampling(pos_samples, num_entity, negative_rate):
 #
 #######################################################################
 
+
 def sort_and_rank(score, target):
     _, indices = torch.sort(score, dim=1, descending=True)
     indices = torch.nonzero(indices == target.view(-1, 1), as_tuple=False)
     indices = indices[:, 1].view(-1)
     return indices
+
 
 def perturb_and_get_raw_rank(embedding, w, a, r, b, test_size, batch_size=100):
     """ Perturb one element in the triplets
@@ -193,17 +208,19 @@ def perturb_and_get_raw_rank(embedding, w, a, r, b, test_size, batch_size=100):
         batch_a = a[batch_start: batch_end]
         batch_r = r[batch_start: batch_end]
         emb_ar = embedding[batch_a] * w[batch_r]
-        emb_ar = emb_ar.transpose(0, 1).unsqueeze(2) # size: D x E x 1
-        emb_c = embedding.transpose(0, 1).unsqueeze(1) # size: D x 1 x V
+        emb_ar = emb_ar.transpose(0, 1).unsqueeze(2)  # size: D x E x 1
+        emb_c = embedding.transpose(0, 1).unsqueeze(1)  # size: D x 1 x V
         # out-prod and reduce sum
-        out_prod = torch.bmm(emb_ar, emb_c) # size D x E x V
-        score = torch.sum(out_prod, dim=0) # size E x V
+        out_prod = torch.bmm(emb_ar, emb_c)  # size D x E x V
+        score = torch.sum(out_prod, dim=0)  # size E x V
         score = torch.sigmoid(score)
         target = b[batch_start: batch_end]
         ranks.append(sort_and_rank(score, target))
     return torch.cat(ranks)
 
 # return MRR (raw), and Hits @ (1, 3, 10)
+
+
 def calc_raw_mrr(embedding, w, test_triplets, hits=[], eval_bz=100):
     with torch.no_grad():
         s = test_triplets[:, 0]
@@ -212,12 +229,14 @@ def calc_raw_mrr(embedding, w, test_triplets, hits=[], eval_bz=100):
         test_size = test_triplets.shape[0]
 
         # perturb subject
-        ranks_s = perturb_and_get_raw_rank(embedding, w, o, r, s, test_size, eval_bz)
+        ranks_s = perturb_and_get_raw_rank(
+            embedding, w, o, r, s, test_size, eval_bz)
         # perturb object
-        ranks_o = perturb_and_get_raw_rank(embedding, w, s, r, o, test_size, eval_bz)
+        ranks_o = perturb_and_get_raw_rank(
+            embedding, w, s, r, o, test_size, eval_bz)
 
         ranks = torch.cat([ranks_s, ranks_o])
-        ranks += 1 # change to 1-indexed
+        ranks += 1  # change to 1-indexed
 
         mrr = torch.mean(1.0 / ranks.float())
         print("MRR (raw): {:.6f}".format(mrr.item()))
@@ -233,6 +252,7 @@ def calc_raw_mrr(embedding, w, test_triplets, hits=[], eval_bz=100):
 #
 #######################################################################
 
+
 def filter_o(triplets_to_filter, target_s, target_r, target_o, num_entities):
     target_s, target_r, target_o = int(target_s), int(target_r), int(target_o)
     filtered_o = []
@@ -244,6 +264,7 @@ def filter_o(triplets_to_filter, target_s, target_r, target_o, num_entities):
         if (target_s, target_r, o) not in triplets_to_filter:
             filtered_o.append(o)
     return torch.LongTensor(filtered_o)
+
 
 def filter_s(triplets_to_filter, target_s, target_r, target_o, num_entities):
     target_s, target_r, target_o = int(target_s), int(target_r), int(target_o)
@@ -257,6 +278,7 @@ def filter_s(triplets_to_filter, target_s, target_r, target_o, num_entities):
             filtered_s.append(s)
     return torch.LongTensor(filtered_s)
 
+
 def perturb_o_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_to_filter):
     """ Perturb object in the triplets
     """
@@ -268,7 +290,8 @@ def perturb_o_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_t
         target_s = s[idx]
         target_r = r[idx]
         target_o = o[idx]
-        filtered_o = filter_o(triplets_to_filter, target_s, target_r, target_o, num_entities)
+        filtered_o = filter_o(triplets_to_filter, target_s,
+                              target_r, target_o, num_entities)
         target_o_idx = int((filtered_o == target_o).nonzero())
         emb_s = embedding[target_s]
         emb_r = w[target_r]
@@ -279,6 +302,7 @@ def perturb_o_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_t
         rank = int((indices == target_o_idx).nonzero())
         ranks.append(rank)
     return torch.LongTensor(ranks)
+
 
 def perturb_s_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_to_filter):
     """ Perturb subject in the triplets
@@ -291,7 +315,8 @@ def perturb_s_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_t
         target_s = s[idx]
         target_r = r[idx]
         target_o = o[idx]
-        filtered_s = filter_s(triplets_to_filter, target_s, target_r, target_o, num_entities)
+        filtered_s = filter_s(triplets_to_filter, target_s,
+                              target_r, target_o, num_entities)
         target_s_idx = int((filtered_s == target_s).nonzero())
         emb_s = embedding[filtered_s]
         emb_r = w[target_r]
@@ -303,6 +328,7 @@ def perturb_s_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_t
         ranks.append(rank)
     return torch.LongTensor(ranks)
 
+
 def calc_filtered_mrr(embedding, w, train_triplets, valid_triplets, test_triplets, hits=[]):
     with torch.no_grad():
         s = test_triplets[:, 0]
@@ -310,15 +336,18 @@ def calc_filtered_mrr(embedding, w, train_triplets, valid_triplets, test_triplet
         o = test_triplets[:, 2]
         test_size = test_triplets.shape[0]
 
-        triplets_to_filter = torch.cat([train_triplets, valid_triplets, test_triplets]).tolist()
+        triplets_to_filter = torch.cat(
+            [train_triplets, valid_triplets, test_triplets]).tolist()
         triplets_to_filter = {tuple(triplet) for triplet in triplets_to_filter}
         print('Perturbing subject...')
-        ranks_s = perturb_s_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_to_filter)
+        ranks_s = perturb_s_and_get_filtered_rank(
+            embedding, w, s, r, o, test_size, triplets_to_filter)
         print('Perturbing object...')
-        ranks_o = perturb_o_and_get_filtered_rank(embedding, w, s, r, o, test_size, triplets_to_filter)
+        ranks_o = perturb_o_and_get_filtered_rank(
+            embedding, w, s, r, o, test_size, triplets_to_filter)
 
         ranks = torch.cat([ranks_s, ranks_o])
-        ranks += 1 # change to 1-indexed
+        ranks += 1  # change to 1-indexed
 
         mrr = torch.mean(1.0 / ranks.float())
         print("MRR (filtered): {:.6f}".format(mrr.item()))
@@ -334,24 +363,51 @@ def calc_filtered_mrr(embedding, w, train_triplets, valid_triplets, test_triplet
 #
 #######################################################################
 
+
 def calc_mrr(embedding, w, train_triplets, valid_triplets, test_triplets, hits=[], eval_bz=100, eval_p="filtered"):
     if eval_p == "filtered":
-        mrr = calc_filtered_mrr(embedding, w, train_triplets, valid_triplets, test_triplets, hits)
+        mrr = calc_filtered_mrr(
+            embedding, w, train_triplets, valid_triplets, test_triplets, hits)
     else:
         mrr = calc_raw_mrr(embedding, w, test_triplets, hits, eval_bz)
     return mrr
 
+
 class KGData():
     def __init__(self, path, dataset) -> None:
         if path is None:
-            raise except('please input valid path.')
-        self.data_path=path
-        self.dataset=dataset
-    
+            raise Exception('please input valid path.')
+        self.data_path = path
+        self.dataset = dataset
+        self.file_path = None
+        self.load_kg()
+
     def load_kg(self):
-        with open(self.data_path):
-            pass
+        if self.dataset == 'wikikg90m':
+            self.file_path = '{}/{}'.format(self.data_path,
+                                            'wikikg90m_kddcup2021')
+            self.train = np.load(
+                '{}/processed/train_hrt.npy'.format(self.file_path))
+            self.valid = np.load(
+                '{}/processed/val_hr.npy'.format(self.file_path))
+            
+            self.valid_correct_index = np.load(
+                '{}/processed/val_t_correct_index.npy'.format(self.file_path))
+            self.valid=np.c_[self.valid,self.valid_correct_index]
+            self.valid_t_candidate = np.load(
+                '{}/processed/val_t_candidate.npy'.format(self.file_path))
+            self.test_hr = np.load(
+                '{}/processed/test_hr.npy'.format(self.file_path))
+            self.test_t_candidate = np.load(
+                '{}/processed/test_t_candidate.npy'.format(self.file_path))
+            self.node_feat=np.load(
+                '{}/processed/entity_feat.npy'.format(self.file_path))
+            self.num_nodes=len(self.node_feat)
+            self.relation_feat=np.load(
+                '{}/processed/relation_feat.npy'.format(self.file_path))
+            self.num_relations=len(self.relation_feat)
 
 def load_data(dataset):
-    if dataset=='wikikg90m':
-        
+    if dataset == 'wikikg90m':
+        return KGData('data',dataset)
+

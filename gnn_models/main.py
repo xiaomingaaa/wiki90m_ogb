@@ -1,7 +1,7 @@
 '''
 Author: your name
 Date: 2021-05-12 13:00:03
-LastEditTime: 2021-05-14 13:23:03
+LastEditTime: 2021-05-15 08:56:37
 LastEditors: Please set LastEditors
 Description: In User Settings Edit
 FilePath: /dglke/gnn_models/rgcn.py
@@ -15,16 +15,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 import random
 from dgl.nn.pytorch import RelGraphConv
-import gnn_models.utils as utils
+import sys
+import os
+sys.path.append(os.getcwd())
+from gnn_models import utils
+#import gnn_models.utils as utils
 from gnn_models.layers import *
 def main(args):
     # load graph data
-    data = load_data(args.dataset)
-    num_nodes = data.num_nodes
+    data = utils.load_data(args.dataset)
+    num_nodes = data.num_nodess
     train_data = data.train
     valid_data = data.valid
     test_data = data.test
-    num_rels = data.num_rels
+    num_rels = data.num_relations
 
     # check cuda
     use_cuda = args.gpu >= 0 and torch.cuda.is_available()
@@ -166,7 +170,7 @@ if __name__ == '__main__':
             help="number of propagation rounds")
     parser.add_argument("--n-epochs", type=int, default=6000,
             help="number of minimum training epochs")
-    parser.add_argument("-d", "--dataset", type=str, required=True,
+    parser.add_argument("-d", "--dataset", type=str, default='wikikg90m',
             help="dataset to use")
     parser.add_argument("--eval-batch-size", type=int, default=500,
             help="batch size when evaluating")
