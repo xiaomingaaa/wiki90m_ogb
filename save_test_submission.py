@@ -1,7 +1,7 @@
 '''
 Author: your name
 Date: 2021-05-11 09:11:36
-LastEditTime: 2021-05-12 09:10:19
+LastEditTime: 2021-05-19 06:26:53
 LastEditors: Please set LastEditors
 Description: In User Settings Edit
 FilePath: /wikikg90m/save_test_submission.py
@@ -60,6 +60,7 @@ if __name__ == '__main__':
 
     best_test_dict = all_test_dicts[best_valid_idx]
     evaluator.save_test_submission(best_test_dict, path)
+    print(evaluator.eval(best_test_dict))
 
 
 

@@ -274,13 +274,16 @@ class KEModel(object):
             rel_dim = relation_dim
         
         self.use_mlp = self.encoder_model_name in ['concat', 'roberta']
+        total_params=0
         if self.encoder_model_name == 'concat':
             self.transform_net = MLP(entity_dim+ent_feat_dim, entity_dim, relation_dim+rel_feat_dim, relation_dim)
             # self.transform_e_net = torch.nn.Linear(entity_dim, entity_dim)
             # self.transform_r_net = torch.nn.Linear(relation_dim, relation_dim)
+            total_params += sum(p.numel() for p in self.transform_net.parameters())
         elif self.encoder_model_name == 'roberta':
             self.transform_net = MLP(ent_feat_dim, entity_dim, rel_feat_dim, relation_dim)
-
+            total_params += sum(p.numel() for p in self.transform_net.parameters())
+        print('# parameters of MLP: ',total_params)
         self.rel_dim = rel_dim
         self.entity_dim = entity_dim
         self.strict_rel_part = args.strict_rel_part
